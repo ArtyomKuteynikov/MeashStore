@@ -1,0 +1,258 @@
+<!-- templates/index.html -->
+
+{% extends "base.html" %}
+
+{% block head %}
+    <style>
+        .save-tag {
+            display: none;
+        }
+
+        #add-mayak-form {
+            display: none;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div style="text-align: center">
+        <h1>Маяки</h1>
+        <div class="card">
+            <div class="card-body pt-3">
+                <div style="overflow-x:auto;">
+                    <form action="/mayaks" method="GET" class="mt-4 mb-4">
+                        <div class="input-group mb-3">
+                            <input type="text" name="search" class="form-control"
+                                   placeholder="Поиск по названию или UUID" value="{{ search_query }}">
+                            <button class="btn btn-outline-secondary" type="submit" id="search-button"><i
+                                    class="bi bi-search"></i></button>
+                        </div>
+                    </form>
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th scope="col">ID</th>
+                            {% if current_user.role == 2 %}
+                                <th scope="col">Сеть</th>
+                            {% endif %}
+                            <th scope="col">Название</th>
+                            <th scope="col">UUID</th>
+                            <th scope="col"></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for mayak in data %}
+                            <tr>
+                                <td>
+                                    {{ mayak.id }}
+                                </td>
+                                {% if current_user.role == 2 %}
+                                    <td>{{  mayak.network }}</td>
+                                {% endif %}
+                                <td>
+
+                                    <span class="tag">
+                                            <span id="name-{{ mayak.id }}" class="tag">{{ mayak.name }}
+                                            </span>
+                                            <button class="edit-tag name btn btn-small   p-0"
+                                                    data-user-id="{{ mayak.id }}"
+                                                    data-attr="name">
+                                                <i class="bi bi-pencil-fill"></i>
+                                            </button>
+                                            <button class="save-tag name btn   p-0" data-user-id="{{ mayak.id }}"
+                                                    data-attr="name">
+                                                <i class="bi bi-save"></i>
+                                            </button>
+                                        </span>
+                                </td>
+                                <td>
+                                    <span class="tag">
+                                            <span id="uuid-{{ mayak.id }}" class="tag">{{ mayak.uuid }}
+                                            </span>
+                                            <button class="edit-tag uuid btn btn-small   p-0"
+                                                    data-user-id="{{ mayak.id }}"
+                                                    data-attr="uuid">
+                                                <i class="bi bi-pencil-fill"></i>
+                                            </button>
+                                            <button class="save-tag uuid btn   p-0" data-user-id="{{ mayak.id }}"
+                                                    data-attr="uuid">
+                                                <i class="bi bi-save"></i>
+                                            </button>
+                                        </span>
+                                </td>
+                                <td>
+                                    <button class="btn  rounded-circle btn-sm btn-danger delete-button" data-bs-toggle="modal"
+                                            data-bs-target="#confirmDeleteModal{{ mayak.id }}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        <tr id="add-user-button">
+                            <td colspan="10" style="text-align: center;">
+                                <button id="add-user-show" class="btn" data-bs-target="#add_mayak"
+                                        data-bs-toggle="modal">Создать
+                                </button>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+                {% if mayaks %}
+                    <div id="pagination" class="d-flex justify-content-end mt-3">
+                        <nav aria-label="Навигация">
+                            <ul class="pagination">
+                                {% if mayaks.has_prev %}
+                                    <li class="page-item">
+                                        <a class="page-link"
+                                           href="?search={{ search_query }}&page={{ mayaks.prev_num }}"><i
+                                                class="bi bi-caret-left-fill"></i></a>
+                                    </li>
+                                {% endif %}
+                                <li class="page-item">
+                                    <a class="page-link"
+                                       href="?search={{ search_query }}&page={{ mayaks.page }}">{{ mayaks.page }}</a>
+                                </li>
+                                {% if mayaks.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link"
+                                           href="?search={{ search_query }}&page={{ mayaks.next_num }}"> <i
+                                                class="bi bi-caret-right-fill"></i></a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    </div>
+                    </div>
+                {% endif %}
+        </div>
+    </div>
+    <script>
+        $(document).ready(function () {
+            $('.edit-tag').click(function () {
+                var userId = $(this).data('user-id');
+                var attr = $(this).data('attr');
+                var tagSpan = $('#' + attr + '-' + userId);
+                var tagInput = $('<input>').attr({
+                    type: 'text',
+                    id: 'edit-' + attr + '-' + userId,
+                    value: tagSpan.text()
+                });
+                tagSpan.replaceWith(tagInput);
+                $(this).hide();
+                $('.save-tag.' + attr + '[data-user-id=' + userId + ']').show();
+            });
+
+            $('.save-tag').click(function () {
+                var userId = $(this).data('user-id');
+                var attr = $(this).data('attr');
+                var newTag = $('#edit-' + attr + '-' + userId).val();
+                $.post('/webapi/edit_beacon', {user_id: userId, new_value: newTag, arg_name: attr}, function (data) {
+                    if (data.success) {
+                        var tagInput = $('#edit-' + attr + '-' + userId);
+                        var tagSpan = $('<span>').attr({
+                            id: attr + '-' + userId,
+                            class: 'tag'
+                        }).text(newTag);
+                        tagInput.replaceWith(tagSpan);
+                        $('.save-tag.' + attr + '[data-user-id=' + userId + ']').hide();
+                        $('.edit-tag.' + attr + '[data-user-id=' + userId + ']').show();
+                    }
+                });
+            });
+
+            $('.delete-button').click(function () {
+                var mayakId = $(this).data('mayak-id');
+                $('#delete-mayak-id').val(mayakId);
+            });
+
+            $('#add-mayak').click(function () {
+                var name = $('#name').val();
+                var uuid = $('#uuid').val();
+                $.post('/webapi/add_beacon', {
+                    name: name,
+                    uuid: uuid
+                }, function (data) {
+                    if (data.success) {
+                        location.reload();
+                        $('#add-mayak-form').hide();
+                        $('#add-mayak-button').show();
+                    } else {
+                        console.log(data.error);
+                        var errorField = $('#error-field');
+                        errorField.text(data.error);
+                        errorField.removeClass('d-none');
+
+                        setTimeout(function () {
+                            errorField.addClass('d-none');
+                        }, 5000);
+                    }
+                });
+            });
+        });
+    </script>
+    {% for mayak in data %}
+        <!-- Модальное окно подтверждения удаления -->
+        <div class="modal fade" id="confirmDeleteModal{{ mayak.id }}" tabindex="-1"
+             aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="confirmDeleteModalLabel">Подтвердите удаление</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Вы уверены, что хотите удалить маяк "{{ mayak.name }}"? <br>
+                            <b style="color: red">Вместе с ним удалятся все уведомления привязанные к маяку</b>
+                            <b>Это действие нельзя будет
+                            отменить</b></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="button" class="btn btn-danger" id="delete{{ mayak.id }}"
+                                data-mayak-id="{{ mayak.id }}">
+                            Удалить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+            $('#delete{{ mayak.id }}').click(function () {
+                $.post('/webapi/delete_beacon/{{ mayak.id }}', {}, function (data) {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        console.log(data.error);
+                        $('#error').text(data.error)
+                    }
+                });
+            });
+        </script>
+    {% endfor %}
+    <div class="modal fade" id="add_mayak" tabindex="-1"
+         aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmDeleteModalLabel">Добавить маяк</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="error-field" class="alert alert-danger d-none"></div>
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Название</label>
+                        <input type="text" class="form-control" id="name" placeholder="Введите название" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="uuid" class="form-label">UUID</label>
+                        <input type="text" class="form-control" id="uuid" placeholder="Введите UUID" required>
+                    </div>
+                    <div class="d-grid">
+                        <button id="add-mayak" class="btn btn-primary">Добавить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

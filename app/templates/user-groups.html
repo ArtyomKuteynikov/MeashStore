@@ -1,0 +1,260 @@
+<!-- templates/groups.html -->
+
+{% extends "base.html" %}
+
+{% block head %}
+    <style>
+        .save-tag {
+            display: none;
+        }
+
+        #add-user-form {
+            display: none;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div style="text-align: center">
+        <h1>Группы пользователей</h1>
+        <div class="card">
+            <div class="card-body pt-3">
+                <div style="overflow-x:auto;">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th scope="col">ID</th>
+                            {% if current_user.role == 2 %}
+                                <th scope="col">Сеть</th>
+                            {% endif %}
+                            <th scope="col">Название</th>
+                            <th scope="col"></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for group in data %}
+                            <tr>
+                                <td>{{ group.id }}</td>
+                                {% if current_user.role == 2 %}
+                                    <td>{{  group.network }}</td>
+                                {% endif %}
+                                <td>
+                                        <span class="tag">
+                                            <span id="name-{{ group.id }}" class="tag">{{ group.name }}
+                                            </span>
+                                            <button class="edit-tag name btn btn-small   p-0"
+                                                    data-user-id="{{ group.id }}"
+                                                    data-attr="name">
+                                                <i class="bi bi-pencil-fill"></i>
+                                            </button>
+                                            <button class="save-tag name btn   p-0" data-user-id="{{ group.id }}"
+                                                    data-attr="name">
+                                                <i class="bi bi-save"></i>
+                                            </button>
+                                        </span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-danger rounded-circle" data-bs-toggle="modal"
+                                            data-bs-target="#confirmDeleteModal{{ group.id }}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-primary rounded-circle" data-bs-toggle="modal"
+                                            data-bs-target="#edit{{ group.id }}">
+                                        <i class="bi bi-people-fill"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        <tr id="add-user-button">
+                            <td colspan="10" style="text-align: center;">
+                                <button id="add-user-show" class="btn" data-bs-target="#add_group"
+                                        data-bs-toggle="modal">Создать
+                                </button>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="pagination" class="d-flex justify-content-end mt-3">
+                    <nav aria-label="Навигация">
+                        <ul class="pagination">
+                            {% if users.has_prev %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?search={{ search_query }}&page={{ users.prev_num }}"><i
+                                            class="bi bi-caret-left-fill"></i></a>
+                                </li>
+                            {% endif %}
+                            <li class="page-item">
+                                <a class="page-link"
+                                   href="?search={{ search_query }}&page={{ users.page }}">{{ users.page }}</a>
+                            </li>
+                            {% if users.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?search={{ search_query }}&page={{ users.next_num }}"> <i
+                                            class="bi bi-caret-right-fill"></i></a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% for i in data %}
+        <!-- Модальное окно подтверждения удаления -->
+        <div class="modal fade" id="confirmDeleteModal{{ i.id }}" tabindex="-1"
+             aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="confirmDeleteModalLabel">Подтвердите удаление</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Вы уверены, что хотите удалить группу {{ i.name }}? <br>
+                            <b style="color: red">Вместе с ней удалятся все уведомления привязанные к группе</b>
+                            <b>Это действие нельзя будет
+                                отменить</b></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="button" class="btn btn-danger" id="delete{{ i.id }}" data-uid="{{ i.id }}">
+                            Удалить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="edit{{ i.id }}" tabindex="-1"
+             aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="confirmDeleteModalLabel">{{ i.name }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form method="POST" action="{{ url_for('main.edit_user_group', id=i.id) }}">
+                            <div class="mb-3">
+                                <label for="userList" class="form-label">Пользователи</label>
+                                <select multiple id="userList" name="users" placeholder="Пользователи">
+                                    {% for user in all_users %}
+                                        {% if user.id in i.users_ids %}
+                                            <option selected value="{{ user.id }}">{{ user.name }}</option>
+                                        {% else %}
+                                            <option value="{{ user.id }}">{{ user.name }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="d-grid">
+                                <button id="add-mayak" type="submit" class="btn btn-primary">Добавить</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            $('#delete{{ i.id }}').click(function () {
+                console.log(123);
+                $.post('/webapi/delete_user_group/{{ i.id }}', {}, function (data) {
+                    if (data.success) {
+                        console.log(data.success);
+                        location.reload();
+                    } else {
+                        console.log(data.error);
+                        $('#error').text(data.error)
+                    }
+                });
+            });
+        </script>
+
+    {% endfor %}
+
+    <script>
+        $(document).ready(function () {
+            $('.edit-tag').click(function () {
+                var userId = $(this).data('user-id');
+                var attr = $(this).data('attr');
+                var tagSpan = $('#' + attr + '-' + userId);
+                var tagInput = $('<input>').attr({
+                    type: 'text',
+                    id: 'edit-' + attr + '-' + userId,
+                    value: tagSpan.text()
+                });
+                tagSpan.replaceWith(tagInput);
+                $(this).hide();
+                $('.save-tag.' + attr + '[data-user-id=' + userId + ']').show();
+            });
+
+            $('.save-tag').click(function () {
+                var userId = $(this).data('user-id');
+                var attr = $(this).data('attr');
+                var newTag = $('#edit-' + attr + '-' + userId).val();
+                $.post('/webapi/edit_user_group', {
+                    user_id: userId,
+                    new_value: newTag,
+                    arg_name: attr
+                }, function (data) {
+                    if (data.success) {
+                        var tagInput = $('#edit-' + attr + '-' + userId);
+                        var tagSpan = $('<span>').attr({
+                            id: attr + '-' + userId,
+                            class: 'tag'
+                        }).text(newTag);
+                        tagInput.replaceWith(tagSpan);
+                        $('.save-tag.' + attr + '[data-user-id=' + userId + ']').hide();
+                        $('.edit-tag.' + attr + '[data-user-id=' + userId + ']').show();
+                    }
+                });
+            });
+
+        });
+
+    </script>
+    <div class="modal fade" id="add_group" tabindex="-1"
+         aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmDeleteModalLabel">Добавить маяк</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="POST" action="{{ url_for('main.add_user_group') }}">
+                        <div id="error-field" class="alert alert-danger d-none"></div>
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Название</label>
+                            <input type="text" class="form-control" id="name" name='name' placeholder="Введите название"
+                                   required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="userList" class="form-label">Пользователи</label>
+                            <select multiple id="userList" name="users" placeholder="Пользователи">
+                                {% for user in all_users %}
+                                    <option value="{{ user.id }}">{{ user.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="d-grid">
+                            <button id="add-mayak" type="submit" class="btn btn-primary">Добавить</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Инициализация мультиселекта с поиском -->
+    <script>
+        jQuery(document).ready(function () {
+            $("select").selectize();
+        });
+        setTimeout(function () {
+            $('#note').fadeOut('fast');
+        }, 10000); // <-- time in milliseconds
+    </script>
+{% endblock %}
