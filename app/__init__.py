@@ -6,6 +6,7 @@ from flask_sqlalchemy import SQLAlchemy
 from app.swagger import get_apispec
 from flask_swagger_ui import get_swaggerui_blueprint
 from flask_cors import CORS
+from . import config
 
 SWAGGER_URL = '/docs'
 API_URL = '/swagger'
@@ -17,7 +18,7 @@ def create_app():
     app = Flask(__name__)
     CORS(app)
 
-    app.config['SECRET_KEY'] = '9OLWxND4o83j4K4iuopO'
+    app.config['SECRET_KEY'] = config.SECRET_KEY
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///DB.db'
 
     db.init_app(app)

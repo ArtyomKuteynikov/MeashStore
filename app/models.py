@@ -2,6 +2,8 @@
 
 from flask_login import UserMixin
 from . import db
+from itsdangerous import URLSafeTimedSerializer as Serializer
+from . import config
 
 
 class User(UserMixin, db.Model):
@@ -17,6 +19,20 @@ class User(UserMixin, db.Model):
     group = db.Column(db.Integer)
     confirmed = db.Column(db.Integer, default=0)
     tag = db.Column(db.String(256))
+
+    def generate_auth_token(self, expiration=600):
+        s = Serializer(config.SECRET_KEY)
+        return s.dumps({'id': self.id})
+
+    @staticmethod
+    def verify_auth_token(token):
+        s = Serializer(config.SECRET_KEY)
+        try:
+            data = s.loads(token)
+        except:
+            return None
+        user = User.query.get(data['id'])
+        return user
 
 
 class Codes(UserMixin, db.Model):
