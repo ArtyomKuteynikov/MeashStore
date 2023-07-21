@@ -1226,7 +1226,7 @@ def all_beacons():
     '''
        ---
    get:
-     summary: Метка обнаружена
+     summary: Все метки
      parameters:
          - in: query
            name: token

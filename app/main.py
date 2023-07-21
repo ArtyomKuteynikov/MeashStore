@@ -10,7 +10,7 @@ import os
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from . import db
-from app.models import User, Groups, Beacons, UserGroups, GroupsMapping, Notifications, Codes
+from app.models import User, Groups, Beacons, UserGroups, GroupsMapping, Notifications, Codes, Texts, Backgrounds
 from functools import wraps
 from flask import current_app, request, jsonify
 from iqsms_rest import Gate
@@ -67,7 +67,7 @@ def login_required(func):
 
 main = Blueprint('main', __name__)
 
-CWD = ''  # '/root/MeashStore/'
+CWD = '/root/MeashStore/'
 
 
 @main.route('/api/auth-admin')
@@ -343,12 +343,12 @@ def users():
     )
 
 
-@main.route('/api/edit-user', methods=['PATCH'])
+@main.route('/api/edit-user', methods=['PUT'])
 @login_required
 def edit_tag():
     '''
     ---
-   patch:
+   put:
      summary: Редактировать пользователя
      parameters:
          - in: query
@@ -364,17 +364,22 @@ def edit_tag():
                 type: object
                 summary: имя аргумента(name, email, phone, tag)
                 properties:
-                   arg_name:
+                   name:
+                     type: string
+                   email:
+                     type: string
+                   phone:
+                     type: string
+                   tag:
                      type: string
                    user_id:
                      type: integer
-                   new_value:
-                     type: string
                 example:   # Sample object
-
-                  arg_name: name // введите имя аргумента(name, email, phone, tag)
+                  name: Тест
+                  email: test1@gmail.com
+                  phone: 79151290122
+                  tag: D57092AC-DFAA-446C-8EF3-C81AA2815B5
                   user_id: 1
-                  new_value: Петр Иванов
      responses:
        '200':
          description: Результат
@@ -404,13 +409,32 @@ def edit_tag():
        - admin
     '''
     try:
-        arg_name = request.json['arg_name']
         user_id = request.json['user_id']
-        new_value = request.json['new_value']
-        if arg_name == 'phone':
-            _ = User.query.filter_by(id=user_id).update({arg_name: new_value, 'confirmed': 0})
+        name = request.json['name']
+        phone = request.json['phone']
+        email = request.json['email']
+        tag = request.json['tag']
+        if User.query.filter_by(email=email).first():
+            return current_app.response_class(
+                response=json.dumps(
+                    {'error': f'Пользователь с таким Email адресом уже зарегистрирован'}
+                ),
+                status=200,
+                mimetype='application/json'
+            )
+        if User.query.filter_by(phone=phone).first():
+            return current_app.response_class(
+                response=json.dumps(
+                    {'error': f'Пользователь с таким номером телефона уже зарегистрирован'}
+                ),
+                status=200,
+                mimetype='application/json'
+            )
+        user = User.query.filter_by(id=user_id).first()
+        if user.phone != phone:
+            _ = User.query.filter_by(id=user_id).update({'name': name, 'phone': phone, 'email': email, 'tag': tag, 'confirmed': 0})
         else:
-            _ = User.query.filter_by(id=user_id).update({arg_name: new_value})
+            _ = User.query.filter_by(id=user_id).update({'name': name, 'email': email, 'tag': tag, })
         db.session.commit()
         return current_app.response_class(
             response=json.dumps(
@@ -744,12 +768,12 @@ def networks():
     )
 
 
-@main.route('/api/edit-network', methods=['PATCH'])
+@main.route('/api/edit-network', methods=['PUT'])
 @login_required
 def edit_network():
     '''
     ---
-   patch:
+   put:
      summary: Редактировать сеть
      parameters:
          - in: query
@@ -1105,12 +1129,12 @@ def beacons():
     )
 
 
-@main.route('/api/edit-beacon', methods=['PATCH'])
+@main.route('/api/edit-beacon', methods=['PUT'])
 @login_required
 def edit_beacon():
     '''
     ---
-   patch:
+   put:
      summary: Редактировать маяк
      parameters:
          - in: query
@@ -1125,18 +1149,16 @@ def edit_beacon():
               schema:
                 type: object
                 properties:
-
-                   arg-name:
+                   name:
+                     type: string
+                   uuid:
                      type: string
                    beacon:
                      type: integer
-                   new-value:
-                     type: string
                 example:   # Sample object
-
-                  arg-name: name
+                  name: Ресторан
+                  uuid: D57092AC-DFAA-446C-8EF3-C81AA2815B5
                   beacon: 1
-                  new-value: Test
      responses:
        '200':
          description: Результат
@@ -1166,10 +1188,10 @@ def edit_beacon():
        - admin
     '''
     try:
-        arg_name = request.json['arg-name']
+        name = request.json['name']
         user_id = request.json['beacon']
-        new_value = request.json['new-value']
-        _ = Beacons.query.filter_by(id=user_id).update({arg_name: new_value})
+        uuid = request.json['uuid']
+        _ = Beacons.query.filter_by(id=user_id).update({'name': name, 'uuid': uuid})
         db.session.commit()
         return current_app.response_class(
             response=json.dumps(
@@ -1564,7 +1586,13 @@ def add_user_group():
         new_rec = GroupsMapping(user=i, user_group=new_group.id)
         db.session.add(new_rec)
         db.session.commit()
-    return redirect(url_for('main.user_groups'))
+    return current_app.response_class(
+        response=json.dumps(
+            {'success': True}
+        ),
+        status=200,
+        mimetype='application/json'
+    )
 
 
 @main.route('/api/edit-user-group', methods=['PUT'])
@@ -1662,7 +1690,13 @@ def edit_user_group():
         new_rec = GroupsMapping(user=i, user_group=id)
         db.session.add(new_rec)
         db.session.commit()
-    return redirect(url_for('main.user_groups'))
+    return current_app.response_class(
+        response=json.dumps(
+            {'success': True}
+        ),
+        status=200,
+        mimetype='application/json'
+    )
 
 
 @main.route('/api/delete-user-group', methods=['DELETE'])
@@ -1985,7 +2019,13 @@ def add_notification():
     file.save(f'{CWD}app/static/files/' + filename)
     _ = Notifications.query.filter_by(id=new_note.id).update({'attachment': filename})
     db.session.commit()
-    return redirect(url_for('main.notifications'))
+    return current_app.response_class(
+        response=json.dumps(
+            {'success': True}
+        ),
+        status=200,
+        mimetype='application/json'
+    )
 
 
 @main.route('/edit-notification', methods=['PUT'])
@@ -2080,7 +2120,13 @@ def edit_notification():
         _ = Notifications.query.filter_by(id=id).update({'attachment': filename})
         db.session.commit()
 
-    return redirect(url_for('main.notifications'))
+    return current_app.response_class(
+        response=json.dumps(
+            {'success': True}
+        ),
+        status=200,
+        mimetype='application/json'
+    )
 
 
 @main.route('/api/delete_notification', methods=['DELETE'])
@@ -2155,27 +2201,117 @@ def delete_notification():
 @main.route('/api/settings', methods=['GET'])
 @login_required
 def settings():
+    '''
+    ---
+   get:
+     summary: Настройки
+     parameters:
+         - in: query
+           name: token
+           schema:
+             type: string
+             example: eyJpZCI6MX0.ZLnd2g.Fk1Z_piqblOU6wqttWaAXVov8Ik
+           description: token
+     responses:
+       '200':
+         description: Результат
+         content:
+           application/json:
+             schema:      # Request body contents
+               type: object
+               properties:
+                   success:
+                     type: boolean
+                   data:
+                     type: object
+                     properties:
+                       screensaver_text_ru:
+                         type: object
+                         properties:
+                               title:
+                                 type: string
+                               text:
+                                 type: string
+                       screensaver_image_ru:
+                         type: object
+                         properties:
+                               filename:
+                                 type: string
+                               link:
+                                 type: string
+                       screensaver_text_en:
+                         type: object
+                         properties:
+                               title:
+                                 type: string
+                               text:
+                                 type: string
+                       screensaver_image_en:
+                         type: object
+                         properties:
+                               filename:
+                                 type: string
+                               link:
+                                 type: string
+       '400':
+         description: Не передан обязательный параметр
+         content:
+           application/json:
+             schema: ErrorSchema
+       '401':
+         description: Неверный токен
+         content:
+           application/json:
+             schema: ErrorSchema
+       '403':
+         description: Пользователь заблокирован
+         content:
+           application/json:
+             schema: ErrorSchema
+     tags:
+       - admin
+    '''
     try:
+        token = request.args.get('token')
+        user = User.verify_auth_token(token)
         return current_app.response_class(
             response=json.dumps(
                 {
                     'success': True,
                     'data': {
-                        'screensaver-text-ru': {
-                            'title': '',
-                            'text': ''
+                        'screensaver_text_ru': {
+                            'title': Texts.query.filter_by(name='screensaver-text-ru',
+                                                           network=user.group).first().title if Texts.query.filter_by(
+                                name='screensaver-text-ru', network=user.group).first() else '',
+                            'text': Texts.query.filter_by(name='screensaver-text-ru',
+                                                          network=user.group).first().text if Texts.query.filter_by(
+                                name='screensaver-text-ru', network=user.group).first() else ''
                         },
-                        'screensaver-image-ru': {
-                            'filename': '',
-                            'link': ''
+                        'screensaver_image_ru': {
+                            'filename': Backgrounds.query.filter_by(
+                                name='screensaver-image-ru',
+                                network=user.group).first().file if Backgrounds.query.filter_by(
+                                name='screensaver-image-ru', network=user.group).first() else '',
+                            'link': url_for('static',
+                                            filename=f"app/{Backgrounds.query.filter_by(name='screensaver-image-ru').first().file}") if Backgrounds.query.filter_by(
+                                name='screensaver-image-ru').first() else ''
                         },
-                        'screensaver-text-en': {
-                            'title': '',
-                            'text': ''
+                        'screensaver_text_en': {
+                            'title': Texts.query.filter_by(name='screensaver-text-en',
+                                                           network=user.group).first().title if Texts.query.filter_by(
+                                name='screensaver-text-en', network=user.group).first() else '',
+                            'text': Texts.query.filter_by(name='screensaver-text-en',
+                                                          network=user.group).first().text if Texts.query.filter_by(
+                                name='screensaver-text-en', network=user.group).first() else ''
                         },
-                        'screensaver-image-en': {
-                            'filename': '',
-                            'link': ''
+                        'screensaver_image_en': {
+                            'filename': Backgrounds.query.filter_by(
+                                name='screensaver-image-en',
+                                network=user.group).first().file if Backgrounds.query.filter_by(
+                                name='screensaver-image-en', network=user.group).first() else '',
+                            'link': url_for('static',
+                                            filename=f"app/{Backgrounds.query.filter_by(name='screensaver-image-en', network=user.group).first().file}") if Backgrounds.query.filter_by(
+                                name='screensaver-image-en', network=user.group).first() else ''
                         },
                     }
                 }
@@ -2191,3 +2327,158 @@ def settings():
             status=400,
             mimetype='application/json'
         )
+
+
+@main.route('/api/update-background', methods=['PATCH'])
+@login_required
+def update_background():
+    '''
+        ---
+       patch:
+         summary: Редактировать фон
+         parameters:
+             - in: query
+               name: token
+               schema:
+                 type: string
+                 example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+               description: token
+         requestBody:
+             content:
+               multipart/form-data:
+                 schema:
+                   type: object
+                   properties:
+                     name:
+                       type: string
+                       description: Example; screensaver-image-en
+                     file:
+                       type: string
+                       format: binary
+         responses:
+           '200':
+             description: Результат
+             content:
+               application/json:
+                 schema:      # Request body contents
+                   type: object
+                   properties:
+                       success:
+                         type: boolean
+           '400':
+             description: Не передан обязательный параметр
+             content:
+               application/json:
+                 schema: ErrorSchema
+           '401':
+             description: Неверный токен
+             content:
+               application/json:
+                 schema: ErrorSchema
+           '403':
+             description: Пользователь заблокирован
+             content:
+               application/json:
+                 schema: ErrorSchema
+         tags:
+           - admin
+        '''
+    token = request.args.get('token')
+    user = User.verify_auth_token(token)
+    name = request.form.get('name')
+    if Backgrounds.query.filter_by(name=name, network=user.group).first():
+        id = Backgrounds.query.filter_by(name=name, network=user.group).first().id
+    else:
+        new_background = Backgrounds(name=name, network=user.group)
+        db.session.add(new_background)
+        db.session.commit()
+        id = new_background.id
+    file = request.files['file']
+    if file:
+        filename = name + str(id) + '.' + file.filename.split('.')[-1]
+        file.save(f'{CWD}app/static/app/' + filename)
+        _ = Backgrounds.query.filter_by(id=id).update({'file': filename})
+        db.session.commit()
+    return current_app.response_class(
+        response=json.dumps(
+            {'success': True}
+        ),
+        status=200,
+        mimetype='application/json'
+    )
+
+
+@main.route('/api/update-text', methods=['PATCH'])
+@login_required
+def update_text():
+    '''
+        ---
+       patch:
+         summary: Редактировать текст
+         parameters:
+             - in: query
+               name: token
+               schema:
+                 type: string
+                 example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+               description: token
+         requestBody:
+             content:
+               multipart/form-data:
+                 schema:
+                   type: object
+                   properties:
+                     name:
+                       type: string
+                       description: Example; screensaver-text-en
+                     title:
+                       type: string
+                     text:
+                       type: string
+         responses:
+           '200':
+             description: Результат
+             content:
+               application/json:
+                 schema:      # Request body contents
+                   type: object
+                   properties:
+                       success:
+                         type: boolean
+           '400':
+             description: Не передан обязательный параметр
+             content:
+               application/json:
+                 schema: ErrorSchema
+           '401':
+             description: Неверный токен
+             content:
+               application/json:
+                 schema: ErrorSchema
+           '403':
+             description: Пользователь заблокирован
+             content:
+               application/json:
+                 schema: ErrorSchema
+         tags:
+           - admin
+        '''
+    token = request.args.get('token')
+    user = User.verify_auth_token(token)
+    name = request.form.get('name')
+    title = request.form.get('title')
+    text = request.form.get('text')
+    if Texts.query.filter_by(name=name, network=user.group).first():
+        Texts.query.filter_by(name=name, network=user.group).update({'title': title, 'text': text})
+    else:
+        new_text = Texts(name=name, network=user.group, title=title, text=text)
+        db.session.add(new_text)
+        db.session.commit()
+    return current_app.response_class(
+        response=json.dumps(
+            {'success': True}
+        ),
+        status=200,
+        mimetype='application/json'
+    )
+

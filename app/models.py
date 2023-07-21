@@ -88,3 +88,18 @@ class SentNotifications(UserMixin, db.Model):
     notification = db.Column(db.Integer)
     user = db.Column(db.Integer)
     time = db.Column(db.Integer)
+
+
+class Backgrounds(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)  # primary keys are required by SQLAlchemy
+    network = db.Column(db.Integer)
+    name = db.Column(db.String(100))
+    file = db.Column(db.String(1000))
+
+
+class Texts(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)  # primary keys are required by SQLAlchemy
+    network = db.Column(db.Integer)
+    name = db.Column(db.String(100))
+    title = db.Column(db.String(1000))
+    text = db.Column(db.String(10000))
