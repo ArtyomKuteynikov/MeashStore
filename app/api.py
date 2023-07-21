@@ -503,12 +503,12 @@ def roles():
     )
 
 
-@auth_api.route('/api/logout')
+@auth_api.route('/api/end-all-sessions')
 def logout():
     """
 ---
 get:
-  summary: Выйти из всех аккаунтов
+  summary: Выйти на всех устройствах
   parameters:
       - in: query
         name: token
