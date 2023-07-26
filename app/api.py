@@ -5,7 +5,8 @@ from flask import Blueprint, request, current_app, url_for
 from flask_login import current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from . import db
-from .models import User, Codes, ResPass, Groups, Beacons, UserGroups, GroupsMapping, Notifications, SentNotifications
+from .models import User, Codes, ResPass, Groups, Beacons, UserGroups, GroupsMapping, Notifications, SentNotifications, \
+    Texts, Backgrounds
 from iqsms_rest import Gate
 import random, string
 import time
@@ -102,7 +103,7 @@ def auth():
                     response=json.dumps(
                         {
                             'result': True,
-                            'token': user.token,
+                            'token': user.generate_auth_token(),
                             'role': user.role,
                             'msg': msg
                         }
@@ -155,7 +156,7 @@ def profile():
                name: token
                schema:
                  type: string
-                 example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+                 example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
                  description: token
          responses:
            '200':
@@ -199,7 +200,7 @@ def profile():
         '''
     try:
         token = request.args.get('token')
-        user = User.query.filter_by(token=token).first()
+        user = User.verify_auth_token(token)
         if not user:
             return current_app.response_class(
                 response=json.dumps(
@@ -373,7 +374,7 @@ def check_code():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
          - in: query
            name: code
@@ -413,7 +414,7 @@ def check_code():
     '''
     try:
         token = request.args.get('token')
-        user = User.query.filter_by(token=token).first()
+        user = User.verify_auth_token(token)
         if not user:
             return current_app.response_class(
                 response=json.dumps(
@@ -544,7 +545,7 @@ get:
 """
     try:
         token = request.args.get('token')
-        if not User.query.filter_by(token=token).first():
+        if not User.verify_auth_token(token):
             return current_app.response_class(
                 response=json.dumps(
                     {'error': f'USER DOES NOT EXIST'}
@@ -552,7 +553,7 @@ get:
                 status=403,
                 mimetype='application/json'
             )
-        if User.query.filter_by(token=token).first().status == "blocked":
+        if User.verify_auth_token(token).status == "blocked":
             return current_app.response_class(
                 response=json.dumps(
                     {'error': "USER BLOCKED"}
@@ -561,7 +562,7 @@ get:
                 mimetype='application/json'
             )
         else:
-            user = User.query.filter_by(token=token).first()
+            user = User.verify_auth_token(token)
             User.query.filter_by(token=token).update({'status': 'incative', "token": generate_password_hash(user.phone,
                                                                                                             method='sha256').replace(
                 'sha256$', '')})
@@ -596,7 +597,7 @@ def edit_profile():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
      requestBody:
         content:
@@ -646,7 +647,7 @@ def edit_profile():
     '''
     try:
         token = request.args.get('token')
-        user = User.query.filter_by(token=token).first()
+        user = User.verify_auth_token(token)
         name = request.json.get('name')
         email = request.json.get('email')
         phone = str(request.json.get('phone')).replace('(', '').replace(')', '').replace('-', '').replace('+',
@@ -660,7 +661,7 @@ def edit_profile():
                 status=401,
                 mimetype='application/json'
             )
-        if User.query.filter_by(token=token).first().status == "blocked":
+        if User.verify_auth_token(token).status == "blocked":
             return current_app.response_class(
                 response=json.dumps(
                     {'error': "USER BLOCKED"}
@@ -934,7 +935,7 @@ def set_password():
     '''
     try:
         token = request.args.get('token')
-        user = User.query.filter_by(token=token).first()
+        user = User.verify_auth_token(token)
         password = request.json.get('password')
         if not user:
             return current_app.response_class(
@@ -944,7 +945,7 @@ def set_password():
                 status=401,
                 mimetype='application/json'
             )
-        if User.query.filter_by(token=token).first().status == "blocked":
+        if User.verify_auth_token(token).status == "blocked":
             return current_app.response_class(
                 response=json.dumps(
                     {'error': "USER BLOCKED"}
@@ -983,7 +984,7 @@ def send_phone_confirmation():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
      requestBody:
         content:
@@ -1027,7 +1028,7 @@ def send_phone_confirmation():
     '''
     try:
         token = request.args.get('token')
-        user = User.query.filter_by(token=token).first()
+        user = User.verify_auth_token(token)
         if not user:
             return current_app.response_class(
                 response=json.dumps(
@@ -1036,7 +1037,7 @@ def send_phone_confirmation():
                 status=401,
                 mimetype='application/json'
             )
-        if User.query.filter_by(token=token).first().status == "blocked":
+        if User.verify_auth_token(token).status == "blocked":
             return current_app.response_class(
                 response=json.dumps(
                     {'error': "USER BLOCKED"}
@@ -1067,7 +1068,6 @@ def send_phone_confirmation():
         )
 
 
-@auth_api.route('/beacon-detected', methods=['GET', 'POST'])
 @auth_api.route('/api/beacon-detected', methods=['GET', 'POST'])
 def beacon_detected():
     '''
@@ -1079,7 +1079,7 @@ def beacon_detected():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
          - in: query
            name: uuid
@@ -1128,17 +1128,7 @@ def beacon_detected():
         uuid = request.args.get('uuid')
         token = request.args.get('token')
 
-        beacon = Beacons.query.filter_by(uuid=uuid).first()
-        if not beacon:
-            return current_app.response_class(
-                response=json.dumps(
-                    {'success': False,
-                     'error': 'BEACON NOT FOUND'}
-                ),
-                status=400,
-                mimetype='application/json'
-            )
-        user = User.query.filter_by(token=token).first()
+        user = User.verify_auth_token(token)
         if not user:
             return current_app.response_class(
                 response=json.dumps(
@@ -1159,33 +1149,75 @@ def beacon_detected():
                 mimetype='application/json'
             )
 
+        if user.tag == uuid:
+            notifications = Notifications.query.filter_by(group=user.group, beacon=0).all()
+            status = 'NOTHING TO SEND'
+
+            for notification in notifications:
+                if notification.time_start <= datetime.datetime.now() <= notification.time_finish:
+                    print('date')
+                    user_group = UserGroups.query.filter_by(id=notification.user_group).first()
+                    users = [i.user for i in GroupsMapping.query.filter_by(user_group=user_group.id).all()]
+                    if user.id in users:
+                        print('user')
+                        if not SentNotifications.query.filter_by(notification=notification.id, user=user.id).first():
+                            print('sent')
+                            new_record = SentNotifications(notification=notification.id, user=user.id,
+                                                           time=int(time.time()))
+                            # db.session.add(new_record)
+                            db.session.commit()
+
+                            return current_app.response_class(
+                                response=json.dumps(
+                                    {
+                                        'success': True,
+                                        'data': {
+                                            "pdf_url": url_for('static', filename='files/' + notification.attachment),
+                                            "text": notification.text,
+                                            "title": notification.title
+                                        }
+                                    }
+                                ),
+                                status=200,
+                                mimetype='application/json'
+                            )
+            return current_app.response_class(
+                response=json.dumps(
+                    {'success': False,
+                     'status': status}
+                ),
+                status=200,
+                mimetype='application/json'
+            )
+
+        beacon = Beacons.query.filter_by(uuid=uuid).first()
+        if not beacon:
+            return current_app.response_class(
+                response=json.dumps(
+                    {'success': False,
+                     'error': 'BEACON NOT FOUND'}
+                ),
+                status=400,
+                mimetype='application/json'
+            )
+
         notifications = Notifications.query.filter_by(beacon=beacon.id).all()
         status = 'NOTHING TO SEND'
-        return current_app.response_class(
-            response=json.dumps(
-                {
-                    'success': True,
-                    'data': {
-                        "pdf_url": url_for('static', filename='files/' + '2.pdf'),
-                        "text": uuid,
-                        "title": 'Beacon detected'
-                    }
-                }
-            ),
-            status=200,
-            mimetype='application/json'
-        )
 
         for notification in notifications:
             if notification.time_start <= datetime.datetime.now() <= notification.time_finish:
-                user_group = UserGroups.query.filter_by(id=notification.group).first()
+                print('date')
+                user_group = UserGroups.query.filter_by(id=notification.user_group).first()
+                print(notification.group)
                 users = [i.user for i in GroupsMapping.query.filter_by(user_group=user_group.id).all()]
+                print(users)
                 if user.id in users:
-                    if True:  # not SentNotifications.query.filter_by(notification=notification.id, user=user.id).first():
-                        # status = send_notification(notification, deviceId)
+                    print('user')
+                    if not SentNotifications.query.filter_by(notification=notification.id, user=user.id).first():
+                        print('sent')
                         new_record = SentNotifications(notification=notification.id, user=user.id,
                                                        time=int(time.time()))
-                        db.session.add(new_record)
+                        # db.session.add(new_record)
                         db.session.commit()
 
                         return current_app.response_class(
@@ -1220,7 +1252,6 @@ def beacon_detected():
         )
 
 
-
 @auth_api.route('/api/all_beacons', methods=['GET', 'POST'])
 def all_beacons():
     '''
@@ -1232,7 +1263,7 @@ def all_beacons():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
      responses:
        '200':
@@ -1273,7 +1304,7 @@ def all_beacons():
     '''
     try:
         token = request.args.get('token')
-        user = User.query.filter_by(token=token).first()
+        user = User.verify_auth_token(token)
         if not user:
             return current_app.response_class(
                 response=json.dumps(
@@ -1311,6 +1342,142 @@ def all_beacons():
                                        'name': i.name
                                    } for i in beacons
                                ] + guest
+                }
+            ),
+            status=200,
+            mimetype='application/json'
+        )
+    except Exception as e:
+        return current_app.response_class(
+            response=json.dumps(
+                {'error': f'ERROR: {e}!'}
+            ),
+            status=400,
+            mimetype='application/json'
+        )
+
+
+@auth_api.route('/api/get-interface', methods=['GET'])
+def get_interface():
+    '''
+    ---
+   get:
+     summary: Получить интерфейс
+     parameters:
+         - in: query
+           name: token
+           schema:
+             type: string
+             example: eyJpZCI6MX0.ZLnd2g.Fk1Z_piqblOU6wqttWaAXVov8Ik
+           description: token
+         - in: query
+           name: lang
+           schema:
+             type: string
+             example: ru
+           description: lang
+         - in: query
+           name: screen
+           schema:
+             type: string
+             example: screensaver
+           description: screen
+     responses:
+       '200':
+         description: Результат
+         content:
+           application/json:
+             schema:      # Request body contents
+               type: object
+               properties:
+                   success:
+                     type: boolean
+                   data:
+                     type: object
+                     properties:
+                       text:
+                         type: object
+                         properties:
+                               title:
+                                 type: string
+
+                               text:
+                                 type: string
+
+                       image:
+                         type: object
+                         properties:
+                               filename:
+                                 type: string
+
+                               link:
+                                 type: string
+
+       '400':
+         description: Не передан обязательный параметр
+         content:
+           application/json:
+             schema: ErrorSchema
+       '401':
+         description: Неверный токен
+         content:
+           application/json:
+             schema: ErrorSchema
+       '403':
+         description: Пользователь заблокирован
+         content:
+           application/json:
+             schema: ErrorSchema
+     tags:
+       - mobile
+    '''
+    try:
+        token = request.args.get('token')
+        user = User.verify_auth_token(token)
+        if not user:
+            return current_app.response_class(
+                response=json.dumps(
+                    {'success': False,
+                     'error': 'USER NOT FOUND'}
+                ),
+                status=401,
+                mimetype='application/json'
+            )
+
+        if user.status == 'blocked':
+            return current_app.response_class(
+                response=json.dumps(
+                    {'success': False,
+                     'error': 'USER BLOCKED'}
+                ),
+                status=403,
+                mimetype='application/json'
+            )
+        lang = request.args.get('lang')
+        screen = request.args.get('screen')
+        return current_app.response_class(
+            response=json.dumps(
+                {
+                    'success': True,
+                    'data': {
+                        'text': {
+                            'title': Texts.query.filter_by(name=f'{screen}-text-{lang}',
+                                                           network=user.group).first().title if Texts.query.filter_by(
+                                name=f'{screen}-text-{lang}', network=user.group).first() else '',
+                            'text': Texts.query.filter_by(name=f'{screen}-text-{lang}',
+                                                          network=user.group).first().text if Texts.query.filter_by(
+                                name=f'{screen}-text-{lang}', network=user.group).first() else ''
+                        },
+                        'image': {
+                            'filename': Backgrounds.query.filter_by(
+                                name=f'{screen}-image-{lang}',
+                                network=user.group).first().file if Backgrounds.query.filter_by(
+                                name=f'{screen}-image-{lang}', network=user.group).first() else '',
+                            'link': url_for('static',
+                                            filename=f"app/{Backgrounds.query.filter_by(name=f'{screen}-image-{lang}').first().file}") if Backgrounds.query.filter_by(
+                                name=f'{screen}-image-{lang}').first() else ''
+                        },
+                    }
                 }
             ),
             status=200,

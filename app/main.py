@@ -1,6 +1,6 @@
 # _XiuCNs7:@xu
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from os import getcwd
 from flask import Blueprint, render_template, request, send_from_directory, make_response, session, redirect, url_for, \
     current_app
@@ -54,6 +54,7 @@ def login_required(func):
         try:
             return func(*args, **kwargs)
         except Exception as e:
+            print(e)
             return current_app.response_class(
                 response=json.dumps(
                     {'error': f'ERROR: {e}!'}
@@ -67,7 +68,12 @@ def login_required(func):
 
 main = Blueprint('main', __name__)
 
-CWD = '/root/MeashStore/'
+CWD = '' # '/root/MeashStore/'
+
+
+@main.route('/')
+def index():
+    return render_template('index.html')
 
 
 @main.route('/api/auth-admin')
@@ -222,7 +228,7 @@ def users():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
          - in: query
            name: search
@@ -230,18 +236,6 @@ def users():
              type: string
              example:
            description: search_query
-         - in: query
-           name: page
-           schema:
-             type: integer
-             example: 1
-           description: page
-         - in: query
-           name: per-page
-           schema:
-             type: integer
-             example: 10
-           description: per-page
      responses:
        '200':
          description: Результат
@@ -277,10 +271,6 @@ def users():
                              type: string
                    search_query:
                      type: string
-                   next_page:
-                     type: string
-                   prev_page:
-                     type: string
        '400':
          description: Не передан обязательный параметр
          content:
@@ -303,19 +293,17 @@ def users():
     token = request.args.get('token')
     user = User.verify_auth_token(token)
     search_query = request.args.get('search', '')  # Получаем значение параметра 'search' из URL
-    page = request.args.get('page', 1, type=int)  # Получаем значение параметра 'page' из URL
-    per_page = request.args.get('per-page', 10, type=int)
     if user.role == 2:
         query = User.query.filter(User.name.contains(search_query) |
                                   User.email.contains(search_query) |
                                   User.phone.contains(search_query))
-        all_users = query.paginate(page=page, per_page=per_page)
+        all_users = query.all()
     else:
         query = User.query.filter((User.name.contains(search_query) |
                                    User.email.contains(search_query) |
                                    User.phone.contains(search_query)) &
                                   (User.group == user.group) & (User.role != 2))
-        all_users = query.paginate(page=page, per_page=per_page)
+        all_users = query.all()
     for i in all_users:
         users.append({
             'id': i.id,
@@ -334,8 +322,6 @@ def users():
                 'result': True,
                 'users': users,
                 'search_query': search_query,
-                'next_page': all_users.next_num if all_users.has_next else None,
-                'prev_page': all_users.prev_num if all_users.has_prev else None
             }
         ),
         status=200,
@@ -345,7 +331,7 @@ def users():
 
 @main.route('/api/edit-user', methods=['PUT'])
 @login_required
-def edit_tag():
+def edit_user():
     '''
     ---
    put:
@@ -355,7 +341,7 @@ def edit_tag():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
      requestBody:
         content:
@@ -414,7 +400,8 @@ def edit_tag():
         phone = request.json['phone']
         email = request.json['email']
         tag = request.json['tag']
-        if User.query.filter_by(email=email).first():
+        user = User.query.filter_by(id=user_id).first()
+        if User.query.filter_by(email=email).first() and user.email != email:
             return current_app.response_class(
                 response=json.dumps(
                     {'error': f'Пользователь с таким Email адресом уже зарегистрирован'}
@@ -422,7 +409,7 @@ def edit_tag():
                 status=200,
                 mimetype='application/json'
             )
-        if User.query.filter_by(phone=phone).first():
+        if User.query.filter_by(phone=phone).first() and user.phone != phone:
             return current_app.response_class(
                 response=json.dumps(
                     {'error': f'Пользователь с таким номером телефона уже зарегистрирован'}
@@ -430,9 +417,9 @@ def edit_tag():
                 status=200,
                 mimetype='application/json'
             )
-        user = User.query.filter_by(id=user_id).first()
         if user.phone != phone:
-            _ = User.query.filter_by(id=user_id).update({'name': name, 'phone': phone, 'email': email, 'tag': tag, 'confirmed': 0})
+            _ = User.query.filter_by(id=user_id).update(
+                {'name': name, 'phone': phone, 'email': email, 'tag': tag, 'confirmed': 0})
         else:
             _ = User.query.filter_by(id=user_id).update({'name': name, 'email': email, 'tag': tag, })
         db.session.commit()
@@ -465,7 +452,7 @@ def add_user():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
      requestBody:
         content:
@@ -590,7 +577,7 @@ def delete_user():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
          - in: query
            name: user
@@ -661,7 +648,7 @@ def networks():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
          - in: query
            name: search
@@ -669,18 +656,6 @@ def networks():
              type: string
              example:
            description: search
-         - in: query
-           name: page
-           schema:
-             type: integer
-             example: 1
-           description: page
-         - in: query
-           name: per-page
-           schema:
-             type: integer
-             example: 10
-           description: per-page
      responses:
        '200':
          description: Результат
@@ -705,10 +680,6 @@ def networks():
                            users:
                              type: integer
                    search_query:
-                     type: string
-                   next_page:
-                     type: string
-                   prev_page:
                      type: string
        '400':
          description: Не передан обязательный параметр
@@ -742,10 +713,8 @@ def networks():
         )
     groups_ = []
     search_query = request.args.get('search', '')  # Получаем значение параметра 'search' из URL
-    page = request.args.get('page', 1, type=int)  # Получаем значение параметра 'page' из URL
     query = Groups.query.filter(Groups.name.contains(search_query))
-    per_page = request.args.get('per-page', 10, type=int)
-    all_groups = query.paginate(page=page, per_page=per_page)
+    all_groups = query.all()
     for i in all_groups:
         groups_.append({
             'id': i.id,
@@ -759,8 +728,6 @@ def networks():
                 'result': True,
                 'networks': groups_,
                 'search_query': search_query,
-                'next_page': all_groups.next_num if all_groups.has_next else None,
-                'prev_page': all_groups.prev_num if all_groups.has_prev else None
             }
         ),
         status=200,
@@ -780,7 +747,7 @@ def edit_network():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
      requestBody:
         content:
@@ -859,7 +826,7 @@ def add_network():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
      requestBody:
         content:
@@ -935,7 +902,7 @@ def delete_network():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
          - in: query
            name: network
@@ -1017,7 +984,7 @@ def beacons():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
          - in: query
            name: search
@@ -1025,18 +992,6 @@ def beacons():
              type: string
              example:
            description: search
-         - in: query
-           name: page
-           schema:
-             type: integer
-             example: 1
-           description: page
-         - in: query
-           name: per-page
-           schema:
-             type: integer
-             example: 10
-           description: per-page
      responses:
        '200':
          description: Результат
@@ -1062,10 +1017,6 @@ def beacons():
                              type: string
                    search_query:
                      type: string
-                   next_page:
-                     type: string
-                   prev_page:
-                     type: string
        '400':
          description: Не передан обязательный параметр
          content:
@@ -1088,8 +1039,6 @@ def beacons():
     token = request.args.get('token')
     user = User.verify_auth_token(token)
     search_query = request.args.get('search', '')  # Получаем значение параметра 'search' из URL
-    page = request.args.get('page', 1, type=int)  # Получаем значение параметра 'page' из URL
-    per_page = request.args.get('per-page', 10, type=int)
     if Beacons.query.count() == 0:
         # Если база данных пуста, предоставляем сообщение или выполняем редирект
         return current_app.response_class(
@@ -1098,30 +1047,30 @@ def beacons():
                     'result': True,
                     'beacons': [],
                     'search_query': search_query,
-                    'next_page': None,
-                    'prev_page': None
                 }
             ),
             status=200,
             mimetype='application/json'
         )
-    query = Beacons.query.filter(Beacons.name.contains(search_query) & (Beacons.group == user.group))
-    all_groups = query.paginate(page=page, per_page=per_page)
+    if user.role == 1:
+        query = Beacons.query.filter(Beacons.name.contains(search_query) & (Beacons.group == user.group))
+    else:
+        query = Beacons.query.filter(Beacons.name.contains(search_query))
+    all_groups = query.all()
     for i in all_groups:
-        beacons_.append({
-            'id': i.id,
-            'network': Groups.query.filter_by(id=i.group).first().name,
-            'name': i.name,
-            'uuid': i.uuid
-        })
+        if Groups.query.filter_by(id=i.group).first():
+            beacons_.append({
+                'id': i.id,
+                'network': Groups.query.filter_by(id=i.group).first().name,
+                'name': i.name,
+                'uuid': i.uuid
+            })
     return current_app.response_class(
         response=json.dumps(
             {
                 'result': True,
                 'beacons': beacons_,
                 'search_query': search_query,
-                'next_page': all_groups.next_num if all_groups.has_next else None,
-                'prev_page': all_groups.prev_num if all_groups.has_prev else None
             }
         ),
         status=200,
@@ -1141,7 +1090,7 @@ def edit_beacon():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
      requestBody:
         content:
@@ -1222,7 +1171,7 @@ def add_beacon():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
      requestBody:
         content:
@@ -1308,7 +1257,7 @@ def delete_beacon():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
          - in: query
            name: beacon
@@ -1379,7 +1328,7 @@ def user_groups():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
          - in: query
            name: search
@@ -1387,18 +1336,6 @@ def user_groups():
              type: string
              example:
            description: search
-         - in: query
-           name: page
-           schema:
-             type: integer
-             example: 1
-           description: page
-         - in: query
-           name: per-page
-           schema:
-             type: integer
-             example: 10
-           description: per-page
      responses:
        '200':
          description: Результат
@@ -1409,7 +1346,7 @@ def user_groups():
                properties:
                    result:
                      type: boolean
-                   user-groups:
+                   user_groups:
                      type: array
                      items:
                        type: object
@@ -1425,10 +1362,6 @@ def user_groups():
                              items:
                                type: integer
                    search_query:
-                     type: string
-                   next_page:
-                     type: string
-                   prev_page:
                      type: string
        '400':
          description: Не передан обязательный параметр
@@ -1452,7 +1385,6 @@ def user_groups():
     user = User.verify_auth_token(token)
     user_groups_ = []
     search_query = request.args.get('search', '')  # Получаем значение параметра 'search' из URL
-    page = request.args.get('page', 1, type=int)  # Получаем значение параметра 'page' из URL
     all_users = User.query.filter_by(
         group=user.group).all() if user.role == 1 else User.query.filter_by().all()
     if UserGroups.query.count() == 0:
@@ -1461,17 +1393,15 @@ def user_groups():
             response=json.dumps(
                 {
                     'result': True,
-                    'user-groups': user_groups_,
+                    'user_groups': user_groups_,
                     'search_query': search_query,
-                    'next_page': None,
-                    'prev_page': None
                 }
             ),
             status=200,
             mimetype='application/json'
         )
     query = UserGroups.query.filter(UserGroups.name.contains(search_query) & (UserGroups.group == user.group))
-    all_groups = query.paginate(page=page, per_page=5)
+    all_groups = query.all()
     for i in all_groups:
         user_groups_.append({
             'id': i.id,
@@ -1483,10 +1413,8 @@ def user_groups():
         response=json.dumps(
             {
                 'result': True,
-                'user-groups': user_groups_,
+                'user_groups': user_groups_,
                 'search_query': search_query,
-                'next_page': all_groups.next_num if all_groups.has_next else None,
-                'prev_page': all_groups.prev_num if all_groups.has_prev else None
             }
         ),
         status=200,
@@ -1506,7 +1434,7 @@ def add_user_group():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
      requestBody:
         content:
@@ -1532,29 +1460,8 @@ def add_user_group():
              schema:      # Request body contents
                type: object
                properties:
-                   result:
+                   success:
                      type: boolean
-                   user-groups:
-                     type: array
-                     items:
-                       type: object
-                       properties:
-                           id:
-                             type: integer
-                           network:
-                             type: string
-                           name:
-                             type: string
-                           users_ids:
-                             type: array
-                             items:
-                               type: integer
-                   search_query:
-                     type: string
-                   next_page:
-                     type: integer
-                   prev_page:
-                     type: string
        '400':
          description: Не передан обязательный параметр
          content:
@@ -1607,7 +1514,7 @@ def edit_user_group():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
          - in: query
            name: group-id
@@ -1638,29 +1545,8 @@ def edit_user_group():
              schema:      # Request body contents
                type: object
                properties:
-                   result:
+                   success:
                      type: boolean
-                   user-groups:
-                     type: array
-                     items:
-                       type: object
-                       properties:
-                           id:
-                             type: integer
-                           network:
-                             type: string
-                           name:
-                             type: string
-                           users_ids:
-                             type: array
-                             items:
-                               type: integer
-                   search_query:
-                     type: string
-                   next_page:
-                     type: integer
-                   prev_page:
-                     type: string
        '400':
          description: Не передан обязательный параметр
          content:
@@ -1683,7 +1569,9 @@ def edit_user_group():
     users = request.json.get('users')
     name = request.json.get('name')
 
-    _ = GroupsMapping.query.filter_by(user_group=id, name=name)
+    _ = UserGroups.query.filter_by(id=id).update({'name': name})
+    db.session.commit()
+    _ = GroupsMapping.query.filter_by(user_group=id).delete()
     db.session.commit()
 
     for i in users:
@@ -1711,7 +1599,7 @@ def delete_user_group():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
          - in: query
            name: group-id
@@ -1784,7 +1672,7 @@ def notifications():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
          - in: query
            name: search
@@ -1792,18 +1680,6 @@ def notifications():
              type: string
              example:
            description: search
-         - in: query
-           name: page
-           schema:
-             type: integer
-             example: 1
-           description: page
-         - in: query
-           name: per-page
-           schema:
-             type: integer
-             example: 10
-           description: per-page
      responses:
        '200':
          description: Результат
@@ -1819,39 +1695,55 @@ def notifications():
                      items:
                        type: object
                        properties:
-                           id:
+                           day:
                              type: integer
-                           network:
+                           date:
                              type: string
-                           beacon:
-                             type: object
-                             properties:
+                           len:
+                             type: integer
+                           notifications:
+                             type: array
+                             items:
+                               type: object
+                               properties:
                                    id:
                                      type: integer
-                                   name:
+                                   network:
                                      type: string
-                           group:
-                             type: object
-                             properties:
-                                   id:
+                                   beacon:
+                                     type: object
+                                     properties:
+                                           id:
+                                             type: integer
+                                           name:
+                                             type: string
+                                   group:
+                                     type: object
+                                     properties:
+                                           id:
+                                             type: integer
+                                           name:
+                                             type: string
+                                   day:
                                      type: integer
-                                   name:
+                                   start:
                                      type: string
-                           start:
-                             type: string
-                           finish:
-                             type: string
-                           title:
-                             type: string
-                           text:
-                             type: string
-                           file:
-                             type: string
+                                   finish:
+                                     type: string
+                                   title:
+                                     type: string
+                                   text:
+                                     type: string
+                                   file:
+                                     type: string
+                                   length:
+                                     type: object
+                                     properties:
+                                        length:
+                                          type: integer
+                                        measure:
+                                          type: string
                    search_query:
-                     type: string
-                   next_page:
-                     type: string
-                   prev_page:
                      type: string
        '400':
          description: Не передан обязательный параметр
@@ -1873,59 +1765,87 @@ def notifications():
     '''
     token = request.args.get('token')
     user = User.verify_auth_token(token)
-    user_groups_ = []
+    user_groups_ = {1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: []}
     search_query = request.args.get('search', '')  # Получаем значение параметра 'search' из URL
-    page = request.args.get('page', 1, type=int)  # Получаем значение параметра 'page' из URL
     all_user_groups = UserGroups.query.filter_by(
         group=user.group).all() if user.role == 1 else UserGroups.query.filter_by().all()
     all_beacons = Beacons.query.filter_by(
         group=user.group).all() if user.role == 1 else Beacons.query.filter_by().all()
     if Notifications.query.count() == 0:
+        notes = []
+        for i in range(1, 8):
+            notes.append({
+                'day': i,
+                'date': (datetime.today() + timedelta(days=i - 1)).strftime('%Y-%m-%d'),
+                'len': len(user_groups_[i]),
+                'notifications': user_groups_[i]
+            })
         # Если база данных пуста, предоставляем сообщение или выполняем редирект
         return current_app.response_class(
             response=json.dumps(
                 {
                     'result': True,
-                    'notifications': user_groups_,
+                    'notifications': notes,
                     'search_query': search_query,
-                    'next_page': None,
-                    'prev_page': None
                 }
             ),
             status=200,
             mimetype='application/json'
         )
-    query = Notifications.query.filter((Notifications.group == user.group))
-    all_groups = query.paginate(page=page, per_page=5)
+    query = Notifications.query.filter(
+        (Notifications.group == user.group) & (Notifications.time_start >= datetime.now().date()))
+    all_groups = query.all()
     for i in all_groups:
         start = i.time_start.strftime('%Y-%m-%d %H:%M')
         finish = i.time_finish.strftime('%Y-%m-%d %H:%M')
-        user_groups_.append({
-            'id': i.id,
-            'network': Groups.query.filter_by(id=i.group).first().name,
-            'beacon': {
-                'id': i.beacon,
-                'name': Beacons.query.filter_by(id=i.beacon).first().name if Beacons.query.filter_by(
-                    id=i.beacon).first() else 'Номера гостей'
-            },
-            'group': {
-                'id': i.user_group,
-                'name': UserGroups.query.filter_by(id=i.user_group).first().name
-            },
-            'start': start,
-            'finish': finish,
-            'title': i.title,
-            'text': i.text,
-            'file': i.attachment
+        length = (i.time_finish - i.time_start).seconds // 60 + (i.time_finish - i.time_start).days * 24 * 60
+        ed_izm = 'мин'
+        print(length, length // 60 // 24 > 0)
+        if length // 60 // 24 > 0:
+            length = length // 60 // 24
+            ed_izm = 'дней'
+        elif length // 60 > 0:
+            length = length // 60
+            ed_izm = 'часов'
+        print(length, ed_izm)
+        if (i.time_start.date() - datetime.now().date()).days + 1 in user_groups_:
+            user_groups_[(i.time_start.date() - datetime.now().date()).days + 1].append({
+                'id': i.id,
+                'network': Groups.query.filter_by(id=i.group).first().name,
+                'beacon': {
+                    'id': i.beacon,
+                    'name': Beacons.query.filter_by(id=i.beacon).first().name if Beacons.query.filter_by(
+                        id=i.beacon).first() else 'Номера гостей'
+                },
+                'group': {
+                    'id': i.user_group,
+                    'name': UserGroups.query.filter_by(id=i.user_group).first().name
+                },
+                'day': (i.time_start.date() - datetime.now().date()).days + 1,
+                'start': start,
+                'finish': finish,
+                'title': i.title,
+                'text': i.text,
+                'file': i.attachment,
+                'length': {
+                    'length': length,
+                    'measure': ed_izm
+                }
+            })
+    notes = []
+    for i in range(1, 8):
+        notes.append({
+            'day': i,
+            'date': (datetime.today() + timedelta(days=i - 1)).strftime('%Y-%m-%d'),
+            'len': len(user_groups_[i]),
+            'notifications': user_groups_[i]
         })
     return current_app.response_class(
         response=json.dumps(
             {
                 'result': True,
-                'notifications': user_groups_,
+                'notifications': notes,
                 'search_query': search_query,
-                'next_page': all_groups.next_num if all_groups.has_next else None,
-                'prev_page': all_groups.prev_num if all_groups.has_prev else None
             }
         ),
         status=200,
@@ -1933,7 +1853,147 @@ def notifications():
     )
 
 
-@main.route('/add-notification', methods=['GET', 'POST'])
+@main.route('/api/notification', methods=['GET'])
+@login_required
+def notification():
+    '''
+    ---
+   get:
+     summary: Уведомление
+     parameters:
+         - in: query
+           name: token
+           schema:
+             type: string
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
+           description: token
+         - in: query
+           name: id
+           schema:
+             type: integer
+             example: 1
+           description: notification
+     responses:
+       '200':
+         description: Результат
+         content:
+           application/json:
+             schema:      # Request body contents
+               type: object
+               properties:
+                   id:
+                     type: integer
+                   network:
+                     type: string
+                   beacon:
+                     type: object
+                     properties:
+                           id:
+                             type: integer
+                           name:
+                             type: string
+                   group:
+                     type: object
+                     properties:
+                           id:
+                             type: integer
+                           name:
+                             type: string
+                   day:
+                     type: integer
+                   start:
+                     type: string
+                   finish:
+                     type: string
+                   title:
+                     type: string
+                   text:
+                     type: string
+                   file:
+                     type: string
+                   length:
+                     type: object
+                     properties:
+                        length:
+                          type: integer
+                        measure:
+                          type: string
+       '400':
+         description: Не передан обязательный параметр
+         content:
+           application/json:
+             schema: ErrorSchema
+       '401':
+         description: Неверный токен
+         content:
+           application/json:
+             schema: ErrorSchema
+       '403':
+         description: Пользователь заблокирован
+         content:
+           application/json:
+             schema: ErrorSchema
+     tags:
+       - admin
+    '''
+    token = request.args.get('token')
+    id = request.args.get('id')
+    user = User.verify_auth_token(token)
+    note = Notifications.query.filter_by(id=id).first()
+    if not note:
+        return current_app.response_class(
+            response=json.dumps(
+                {
+                    'error': 'Notification not found'
+                }
+            ),
+            status=400,
+            mimetype='application/json'
+        )
+    i = note
+    start = i.time_start.strftime('%Y-%m-%d %H:%M')
+    finish = i.time_finish.strftime('%Y-%m-%d %H:%M')
+    length = (i.time_finish - i.time_start).seconds // 60 + (i.time_finish - i.time_start).days * 24 * 60
+    ed_izm = 'мин'
+    if length // 60 // 24 > 0:
+        length = length // 60 // 24
+        ed_izm = 'дней'
+    elif length // 60 > 0:
+        length = length // 60
+        ed_izm = 'часов'
+    data = {
+        'id': i.id,
+        'network': Groups.query.filter_by(id=i.group).first().name,
+        'beacon': {
+            'id': i.beacon,
+            'name': Beacons.query.filter_by(id=i.beacon).first().name if Beacons.query.filter_by(
+                id=i.beacon).first() else 'Номера гостей'
+        },
+        'group': {
+            'id': i.user_group,
+            'name': UserGroups.query.filter_by(id=i.user_group).first().name
+        },
+        'day': (i.time_start.date() - datetime.now().date()).days + 1,
+        'start': start,
+        'finish': finish,
+        'title': i.title,
+        'text': i.text,
+        'file': i.attachment,
+        'length': {
+            'length': length,
+            'measure': ed_izm
+        }
+    }
+    return current_app.response_class(
+        response=json.dumps(
+            data
+        ),
+        status=200,
+        mimetype='application/json'
+    )
+
+
+@main.route('/api/add-notification', methods=['GET', 'POST'])
 @login_required
 def add_notification():
     '''
@@ -1945,7 +2005,7 @@ def add_notification():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
      requestBody:
          content:
@@ -1961,7 +2021,7 @@ def add_notification():
                    description: Example; 1
                  start:
                    type: string
-                   description: Example; 2023-05-23T09:30
+                   description: Example; 2023-05-24T09:30
                  finish:
                    type: string
                    description: Example; 2023-05-24T09:30
@@ -2004,21 +2064,25 @@ def add_notification():
     '''
     token = request.args.get('token')
     user = User.verify_auth_token(token)
-    beacon = request.form.get('beacon')
-    group = request.form.get('group')
-    start = datetime.strptime(request.form.get('start'), '%Y-%m-%dT%H:%M')
+    beacon = int(request.form.get('beacon'))
+    group = int(request.form.get('group'))
+    start = datetime.strptime(request.form.get('start'), '%Y-%m-%dT%H:%M') # request.form.get('start')
     finish = datetime.strptime(request.form.get('finish'), '%Y-%m-%dT%H:%M')
     title = request.form.get('title')
     text = request.form.get('text')
-    file = request.files['file']
+    if request.files:
+        file = request.files['file']
+    else:
+        file = None
     new_note = Notifications(group=user.group, beacon=beacon, user_group=group, time_start=start,
                              time_finish=finish, text=text, title=title)
     db.session.add(new_note)
     db.session.commit()
-    filename = str(new_note.id) + '.' + file.filename.split('.')[-1]
-    file.save(f'{CWD}app/static/files/' + filename)
-    _ = Notifications.query.filter_by(id=new_note.id).update({'attachment': filename})
-    db.session.commit()
+    if file:
+        filename = str(new_note.id) + '.' + file.filename.split('.')[-1]
+        file.save(f'{CWD}app/static/files/' + filename)
+        _ = Notifications.query.filter_by(id=new_note.id).update({'attachment': filename})
+        db.session.commit()
     return current_app.response_class(
         response=json.dumps(
             {'success': True}
@@ -2028,7 +2092,7 @@ def add_notification():
     )
 
 
-@main.route('/edit-notification', methods=['PUT'])
+@main.route('/api/edit-notification', methods=['PUT'])
 @login_required
 def edit_notification():
     '''
@@ -2040,7 +2104,7 @@ def edit_notification():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
          - in: query
            name: notification
@@ -2104,16 +2168,19 @@ def edit_notification():
        - admin
     '''
     id = request.args.get('notifications')
-    beacon = request.form.get('beacon')
-    group = request.form.get('group')
+    beacon = int(request.form.get('beacon'))
+    group = int(request.form.get('group'))
     start = datetime.strptime(request.form.get('start'), '%Y-%m-%dT%H:%M')
     finish = datetime.strptime(request.form.get('finish'), '%Y-%m-%dT%H:%M')
-    text = request.form.get('text')
     title = request.form.get('title')
+    text = request.form.get('text')
+    if request.files:
+        file = request.files['file']
+    else:
+        file = None
     _ = Notifications.query.filter_by(id=id).update({'beacon': beacon, 'user_group': group, 'time_start': start,
                                                      'time_finish': finish, 'text': text, 'title': title})
     db.session.commit()
-    file = request.files['file']
     if file:
         filename = str(id) + '.' + file.filename.split('.')[-1]
         file.save(f'{CWD}app/static/files/' + filename)
@@ -2141,7 +2208,7 @@ def delete_notification():
            name: token
            schema:
              type: string
-             example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+             example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
            description: token
          - in: query
            name: notification-id
@@ -2341,7 +2408,7 @@ def update_background():
                name: token
                schema:
                  type: string
-                 example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+                 example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
                description: token
          requestBody:
              content:
@@ -2420,12 +2487,12 @@ def update_text():
                name: token
                schema:
                  type: string
-                 example: xv2ossY6V9fikmjp$a45f9c93467deca882d3219ba4c568e3a9ebe4a53dbd17b03ec6987a9976b8bc
+                 example: eyJpZCI6MX0.ZLpqAg.CtaNAVLpWRvUBlWsPYCFwx4YOqI
                description: token
          requestBody:
              content:
-               multipart/form-data:
-                 schema:
+               application/json:
+                 schema:      # Request body contents
                    type: object
                    properties:
                      name:
@@ -2435,6 +2502,10 @@ def update_text():
                        type: string
                      text:
                        type: string
+                   example:
+                       name: screensaver-text-en
+                       title: Title
+                       text: Text
          responses:
            '200':
              description: Результат
@@ -2465,11 +2536,12 @@ def update_text():
         '''
     token = request.args.get('token')
     user = User.verify_auth_token(token)
-    name = request.form.get('name')
-    title = request.form.get('title')
-    text = request.form.get('text')
+    name = request.json.get('name')
+    title = request.json.get('title')
+    text = request.json.get('text')
     if Texts.query.filter_by(name=name, network=user.group).first():
         Texts.query.filter_by(name=name, network=user.group).update({'title': title, 'text': text})
+        db.session.commit()
     else:
         new_text = Texts(name=name, network=user.group, title=title, text=text)
         db.session.add(new_text)
@@ -2481,4 +2553,3 @@ def update_text():
         status=200,
         mimetype='application/json'
     )
-

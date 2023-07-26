@@ -7,6 +7,7 @@ from app.swagger import get_apispec
 from flask_swagger_ui import get_swaggerui_blueprint
 from flask_cors import CORS
 from . import config
+import mimetypes
 
 SWAGGER_URL = '/docs'
 API_URL = '/swagger'
@@ -15,6 +16,8 @@ db = SQLAlchemy()
 
 
 def create_app():
+    mimetypes.add_type('application/javascript', '.js')
+    mimetypes.add_type('text/css', '.css')
     app = Flask(__name__)
     CORS(app)
 
